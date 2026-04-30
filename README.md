@@ -33,38 +33,36 @@ kimi_chat/
 
 ## 🚀 快速开始
 
-### 方式一：使用 Conda（推荐）
+### 1. 创建 Conda 环境
 
 ```bash
-# 1. 创建并激活环境
-conda env create -f environment.yml
-conda activate kimi_chat
-
-# 2. 配置 API Key
-copy .env.example .env
-# 编辑 .env，填入你的 Kimi API Key（sk- 开头）
-
-# 3. 启动
-streamlit run app.py
-```
-
-### 方式二：使用 pip
-
-```bash
-# 1. 创建 Python 3.11 环境
 conda create -n kimi_chat python=3.11 -y
 conda activate kimi_chat
+```
 
-# 2. 安装依赖
+### 2. 安装依赖
+
+```bash
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
 
-# 3. 配置 API Key
+> 首次安装会下载 PyTorch、Embedding 模型等，耗时约 5~10 分钟，请耐心等待。
+
+### 3. 配置 API Key
+
+```bash
 copy .env.example .env
-# 编辑 .env，填入你的 Kimi API Key
+```
 
-# 4. 启动
+编辑 `.env` 文件，填入你的 Kimi API Key（以 `sk-` 开头）。
+
+### 4. 启动
+
+```bash
 streamlit run app.py
 ```
+
+浏览器会自动打开 `http://localhost:8501`。
 
 ---
 
