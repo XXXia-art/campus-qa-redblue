@@ -108,13 +108,17 @@ with st.sidebar:
     if attack_mode:
         st.markdown("<div class='attack-box'>攻击模式已开启，可直接输入注入载荷测试</div>", unsafe_allow_html=True)
         from attack.prompt_injection import PromptInjection
-        payloads = PromptInjection.list_payloads()
-        payload_names = ["手动输入"] + list(payloads.keys())
+        cases = PromptInjection.list_cases()
+        payload_names = ["手动输入"] + list(cases.keys())
         selected = st.selectbox("快速选择攻击载荷", payload_names, 
                                 index=payload_names.index(st.session_state.selected_payload))
         st.session_state.selected_payload = selected
         if selected != "手动输入":
-            st.text_area("载荷预览", payloads[selected], height=100)
+            case = cases[selected]
+            st.caption(f"类型: {case.category} | 目标: {case.objective}")
+            st.text_area("载荷预览", case.payload, height=100)
+            st.caption(f"成功信号: {case.success_signal}")
+            st.caption(f"防御关注点: {case.defense_focus}")
     
     defense_mode = st.toggle("🔵 蓝队防御模式", value=st.session_state.defense_mode)
     st.session_state.defense_mode = defense_mode
@@ -154,8 +158,7 @@ if question:
     # 红队：自动附加选中的攻击载荷
     if st.session_state.attack_mode and st.session_state.selected_payload != "手动输入":
         from attack.prompt_injection import PromptInjection
-        payload = PromptInjection.get_payload(st.session_state.selected_payload)
-        question = question + "\n\n" + payload
+        question = PromptInjection.build_test_input(question, st.session_state.selected_payload)
         st.toast(f"⚠️ 已自动附加攻击载荷: {st.session_state.selected_payload}", icon="🔴")
     
     # 显示用户消息（显示原始问题）

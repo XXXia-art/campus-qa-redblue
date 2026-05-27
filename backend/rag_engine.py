@@ -2,6 +2,7 @@ from backend.llm_client import KimiClient
 from backend.vector_store import VectorStore
 from backend.document_loader import DocumentLoader
 from backend.config import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K
+from backend.prompts import SYSTEM_PROMPT, build_user_prompt
 
 
 class RAGEngine:
@@ -56,25 +57,11 @@ class RAGEngine:
         contexts = results['documents'][0] if results['documents'] else []
         metadatas = results['metadatas'][0] if results['metadatas'] else []
 
-        # 2. 构造 Prompt
-        context_str = "\n\n---\n".join([f"【片段{i+1}】\n{c}" for i, c in enumerate(contexts)])
-        
-        system_prompt = (
-            "你是一个专业的校园智能问答助手。"
-            # "请严格根据以下提供的参考资料回答用户问题。"
-            # "如果参考资料中没有相关信息，请明确告知用户'根据现有资料无法回答该问题'，"
-            # "不要编造信息。回答请保持简洁、准确。"
-        )
-        
-        user_prompt = f"""参考资料：
-{context_str}
-
-用户问题：{question}
-
-请根据以上参考资料回答用户问题："""
+        # 2. 将检索资料与用户问题作为不可信数据封装，降低指令混淆风险
+        user_prompt = build_user_prompt(question, contexts)
 
         # 3. 调用 Kimi API 生成回答
-        answer = self.llm.chat(system_prompt, user_prompt)
+        answer = self.llm.chat(SYSTEM_PROMPT, user_prompt)
 
         sources = list(set([m['source'] for m in metadatas])) if metadatas else []
 

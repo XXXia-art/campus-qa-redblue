@@ -16,8 +16,10 @@ class InputFilter:
         "忽略所有",
         "system prompt",
         "系统提示",
+        "内部配置",
         "jailbreak",
         "绕开限制",
+        "绕过网站",
         "DAN 模式",
         "developer mode",
     ]
@@ -26,9 +28,12 @@ class InputFilter:
     DANGEROUS_PATTERNS = [
         r"忽略.*指令",
         r"忽略.*提示",
+        r"忽略.*(?:规则|任务|参考资料)",
         r"不再是一个.*AI",
         r"不再受.*限制",
         r"角色扮演.*没有.*限制",
+        r"不受限制的.*助手",
+        r"(?:逐字输出|披露).*(?:提示词|配置|安全策略)",
     ]
 
     @classmethod
@@ -40,7 +45,8 @@ class InputFilter:
             {"safe": bool, "reason": str, "matched": list}
         """
         matched = []
-        lower_input = user_input.lower()
+        normalized_input = re.sub(r"\s+", "", user_input)
+        lower_input = normalized_input.lower()
 
         # 关键词匹配
         for keyword in cls.DANGEROUS_KEYWORDS:
@@ -49,7 +55,7 @@ class InputFilter:
 
         # 正则模式匹配
         for pattern in cls.DANGEROUS_PATTERNS:
-            if re.search(pattern, user_input, re.IGNORECASE):
+            if re.search(pattern, normalized_input, re.IGNORECASE):
                 matched.append(f"模式: '{pattern}'")
 
         if matched:

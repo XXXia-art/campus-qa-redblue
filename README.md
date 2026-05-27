@@ -11,7 +11,6 @@ kimi_chat/
 ├── app.py                  # Web 界面入口（Streamlit）
 ├── cli.py                  # 命令行入口
 ├── requirements.txt        # pip 依赖
-├── environment.yml         # conda 环境配置
 ├── .env.example            # 环境变量模板
 ├── data/                   # 校园公开数据（可替换为你自己的）
 │   ├── sample_campus.txt
@@ -25,8 +24,11 @@ kimi_chat/
 │   └── rag_engine.py       # RAG 问答引擎
 ├── attack/                 # 🔴 红队攻击模块
 │   └── prompt_injection.py # 提示词注入载荷库
-└── defense/                # 🔵 蓝队防御模块
-    └── input_filter.py     # 输入安全过滤器
+├── defense/                # 🔵 蓝队防御模块
+│   └── input_filter.py     # 输入安全过滤器
+├── docs/
+│   └── MCP_SECURITY_EXPERIMENT.md # MCP 受控安全实验方案
+└── tests/                  # 安全提示词与载荷回归测试
 ```
 
 ---
@@ -116,8 +118,8 @@ streamlit run app.py
 
 | 模式 | 操作 | 效果 |
 |------|------|------|
-| **🔴 红队攻击** | 开启开关 → 选择攻击载荷 → 输入正常问题 | 系统自动附加注入语句，测试模型安全性 |
-| **🔵 蓝队防御** | 开启开关 → 输入攻击语句 | 系统检测并拦截可疑输入 |
+| **🔴 红队攻击** | 开启开关 → 选择攻击案例 → 输入正常问题 | 展示攻击目标、成功信号及载荷，并自动附加测试文本 |
+| **🔵 蓝队防御** | 开启开关 → 输入攻击语句 | 系统检测并拦截可疑输入；RAG prompt 另外隔离不可信资料 |
 
 ---
 
@@ -125,15 +127,30 @@ streamlit run app.py
 
 ### 红队（攻击方）
 1. 开启「🔴 红队攻击模式」
-2. 在下拉菜单选择攻击载荷（如 `ignore_instruction`）
+2. 在下拉菜单选择攻击载荷（如 `direct_prompt_leak`）
 3. 输入一个正常问题（如"你好"）
 4. 系统自动附加攻击语句，观察模型是否被攻破
+
+当前案例包括直接提示词泄露、强制输出、角色扮演越权、上下文边界突破与间接注入。
+每项均提供成功信号，便于记录防御前后的攻击成功率。
 
 ### 蓝队（防御方）
 1. 开启「🔵 蓝队防御模式」
 2. 分析 `defense/input_filter.py` 中的规则
 3. 尝试补充新的过滤规则或改进检测逻辑
 4. 重新测试红队攻击，验证防御效果
+
+### MCP 工具安全实验
+
+针对未来接入 MCP 工具后的信任边界，参见
+[`docs/MCP_SECURITY_EXPERIMENT.md`](docs/MCP_SECURITY_EXPERIMENT.md)。方案只使用
+隔离的 mock server 和 canary 数据，覆盖恶意工具描述、恶意工具结果及越权调用。
+
+### 本地回归测试
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ---
 
