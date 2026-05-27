@@ -1,6 +1,7 @@
 import os
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
+import hashlib
 import chromadb
 from sentence_transformers import SentenceTransformer
 from backend.config import EMBEDDING_MODEL, VECTOR_DB_PATH
@@ -20,11 +21,16 @@ class VectorStore:
     def add_documents(self, documents: list, ids: list = None, metadatas: list = None):
         """向知识库中添加文档片段"""
         if ids is None:
-            start_id = self.collection.count()
-            ids = [str(start_id + i) for i in range(len(documents))]
+            metadata_values = metadatas or [{} for _ in documents]
+            ids = [
+                hashlib.sha256(
+                    f"{metadata.get('source', '')}:{metadata.get('chunk_index', '')}:{document}".encode("utf-8")
+                ).hexdigest()
+                for document, metadata in zip(documents, metadata_values)
+            ]
 
         embeddings = self.embedding_model.encode(documents, show_progress_bar=True).tolist()
-        self.collection.add(
+        self.collection.upsert(
             documents=documents,
             embeddings=embeddings,
             ids=ids,
