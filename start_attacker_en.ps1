@@ -71,19 +71,14 @@ if ($Mode -eq "prompt" -or $Mode -eq "both") {
 Write-Host ""
 Write-Host "Starting mitmproxy..." -ForegroundColor Green
 
-# Create temp dir for config and logs
+# Create temp dir for logs
 $tempDir = Join-Path $env:TEMP ("mitmweb-" + [System.Guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
-
-# Write config.yaml with fixed web password
-$webPassword = "mitm"
-$configFile = Join-Path $tempDir "config.yaml"
-"web_password: $webPassword" | Out-File -FilePath $configFile -Encoding utf8 -Force
 
 $logOut = Join-Path $tempDir "mitmweb.out.log"
 $logErr = Join-Path $tempDir "mitmweb.err.log"
 
-$baseArgs = @("--conf", $tempDir, "--web-host", "0.0.0.0", "--web-port", "8081", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
+$baseArgs = @("--web-host", "0.0.0.0", "--web-port", "8081", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
 $allArgs = $baseArgs + $scriptArgs
 
 try {
@@ -96,8 +91,7 @@ try {
     exit 1
 }
 
-Write-Host "Config dir: $tempDir" -ForegroundColor Gray
-Write-Host "Web UI password: $webPassword" -ForegroundColor Yellow
+Write-Host "Log dir: $tempDir" -ForegroundColor Gray
 
 # Wait for mitmweb to print the authentication token
 Start-Sleep -Seconds 3
@@ -114,14 +108,18 @@ if ($proc.HasExited) {
 }
 
 # Try to extract token from log
-$token = $webPassword
+$token = $null
 $logContent = ""
 if (Test-Path $logOut) { $logContent += Get-Content $logOut -Raw -ErrorAction SilentlyContinue }
 if (Test-Path $logErr) { $logContent += Get-Content $logErr -Raw -ErrorAction SilentlyContinue }
 
 if ($logContent -match '\?token=([a-f0-9]{32})') {
     $token = $Matches[1]
-    Write-Host "Detected random token: $token" -ForegroundColor Cyan
+    Write-Host "Detected token: $token" -ForegroundColor Cyan
+} else {
+    Write-Host "Could not detect token from logs. Please check the logs at:" -ForegroundColor Red
+    Write-Host "  $logOut" -ForegroundColor Red
+    Write-Host "  $logErr" -ForegroundColor Red
 }
 
 $webUrl = "http://localhost:8081/?token=$token"
