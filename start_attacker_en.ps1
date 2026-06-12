@@ -67,22 +67,31 @@ if ($Mode -eq "prompt" -or $Mode -eq "both") {
     }
 }
 
-# Check and free ports
-function Stop-ProcessOnPort($port) {
-    $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($conn) {
-        $procId = $conn.OwningProcess
-        $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
-        if ($p) {
-            Write-Host "Port $port is occupied by $($p.ProcessName) (PID: $procId), stopping it..." -ForegroundColor Yellow
-            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
+# Check ports
+function Test-PortOccupied($port) {
+    $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    if ($conns) {
+        $procIds = $conns | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($procId in $procIds) {
+            $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+            if ($p) {
+                Write-Host "Port $port is occupied by: $($p.ProcessName) (PID: $procId)" -ForegroundColor Yellow
+            }
         }
+        return $true
     }
+    return $false
 }
 
-Stop-ProcessOnPort 8080
-Stop-ProcessOnPort 8081
+$port8080Busy = Test-PortOccupied 8080
+$port8081Busy = Test-PortOccupied 8081
+if ($port8080Busy -or $port8081Busy) {
+    Write-Host "" 
+    Write-Host "Please stop the processes above manually, or run this script as administrator." -ForegroundColor Red
+    Write-Host "Alternatively, change the ports in this script and update victim proxy settings." -ForegroundColor Red
+    Read-Host "Press Enter to exit"
+    exit 1
+}
 
 # Start mitmproxy
 Write-Host ""
