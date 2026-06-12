@@ -67,6 +67,23 @@ if ($Mode -eq "prompt" -or $Mode -eq "both") {
     }
 }
 
+# Check and free ports
+function Stop-ProcessOnPort($port) {
+    $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($conn) {
+        $procId = $conn.OwningProcess
+        $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+        if ($p) {
+            Write-Host "Port $port is occupied by $($p.ProcessName) (PID: $procId), stopping it..." -ForegroundColor Yellow
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+        }
+    }
+}
+
+Stop-ProcessOnPort 8080
+Stop-ProcessOnPort 8081
+
 # Start mitmproxy
 Write-Host ""
 Write-Host "Starting mitmproxy..." -ForegroundColor Green
