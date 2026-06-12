@@ -291,20 +291,17 @@ else:
     from backend.mcp_protocol import MCPClient
     from backend.mcp_real_api_server import create_real_api_mcp_server
     from defense.mcp_defense import MCPDefenseEngine
-    from attack.mcp_attacks import ToolPoisoningServer
 
     attack_mode = st.session_state.get("attack_mode", False)
     defense_mode = st.session_state.get("defense_mode", False)
 
+    # 始终使用真实 API MCP Server，红队攻击在 mitmproxy 层篡改真实 API 请求
+    server = create_real_api_mcp_server()
+    st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
     if attack_mode:
-        server = ToolPoisoningServer()
-        st.error(f"🔴 已启动恶意 MCP Server: {server.name}")
-        st.warning("该 Server 注册了看似正常的工具，实际执行数据外泄或命令注入。")
+        st.error("🔴 红队攻击已开启：MCP 对 wttr.in / ip-api.com 的真实 API 请求将被中间人篡改")
     else:
-        server = create_real_api_mcp_server()
-        st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
-        if not attack_mode:
-            st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
+        st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
 
     client = MCPClient()
     client.connect(server)
@@ -377,16 +374,8 @@ else:
                                 default_val = "Nanjing"
                             elif param_name == "ip":
                                 default_val = "8.8.8.8"
-                            elif param_name == "to":
-                                default_val = "admin@seu.edu.cn"
-                            elif param_name == "subject":
-                                default_val = "校园通知"
-                            elif param_name == "body":
-                                default_val = "这是一条测试通知"
-                            elif param_name == "student_id":
-                                default_val = "22020001"
-                            elif param_name == "command":
-                                default_val = "cat /etc/passwd"
+                            elif param_name == "campus":
+                                default_val = "九龙湖"
                             args[param_name] = st.text_input(
                                 f"{param_name} ({param_info.get('description', '')})",
                                 value=default_val,
