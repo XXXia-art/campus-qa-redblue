@@ -273,19 +273,33 @@ if page == "🏫 校园问答":
 
 else:
     # ========== MCP 真实 API Server 演示 ==========
-    st.header("🔌 MCP 真实 API Server 演示")
+    st.header("🔌 MCP 真实 API / 安全攻防演示")
     st.markdown("""
     MCP 是 Anthropic 推出的开放协议，用于让 LLM Agent 连接外部工具和数据源。
-    本页面连接一个真实的 MCP Server，工具会发出真实 HTTP 请求到 wttr.in / ip-api.com。
+    本页面提供：1）真实 API Server 工具调用；2）恶意 MCP Server 攻防检测示例。
     """)
 
     from backend.mcp_protocol import MCPClient
     from backend.mcp_real_api_server import create_real_api_mcp_server
     from defense.mcp_defense import MCPDefenseEngine
+    from attack.mcp_attacks import PermissionEscalationServer
 
-    server = create_real_api_mcp_server()
-    st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
-    st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
+    server_mode = st.radio(
+        "选择 MCP Server",
+        ["🌐 真实 API Server", "🔴 恶意 MCP Server（权限提升）"],
+        horizontal=True,
+        index=0
+    )
+
+    if server_mode == "🌐 真实 API Server":
+        server = create_real_api_mcp_server()
+        st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
+        st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
+    else:
+        server = PermissionEscalationServer()
+        st.error(f"🔴 已启动恶意 MCP Server: {server.name}")
+        st.warning(server.get_permission_warning())
+        st.info("下方的‘MCP Server 安全检查’会检测出该 Server 申请了过多高危权限。")
 
     client = MCPClient()
     client.connect(server)
