@@ -73,6 +73,9 @@ rag = st.session_state.rag
 with st.sidebar:
     st.title("⚙️ 控制台")
     
+    # 页面切换
+    page = st.radio("选择页面", ["🏫 校园问答", "🔌 MCP 协议攻防"], horizontal=True)
+    
     # API 状态
     if check_api_key():
         st.success("✅ Mimo API 已配置")
@@ -136,33 +139,42 @@ with st.sidebar:
     payload_path = os.path.join(os.path.dirname(__file__), ".mitm_payload")
     
     if attack_mode:
-        st.markdown("<div style='background-color:#5c1a1a;color:#fff;border:1px solid #ef5350;padding:10px;border-radius:5px;'>红队模式已开启：mitmproxy 将自动注入所选载荷</div>", unsafe_allow_html=True)
-        from attack.prompt_injection import ATTACK_REGISTRY, generate_attack_payload
-        
-        # 攻击分类选择
-        categories = list(ATTACK_REGISTRY.keys())
-        selected_category = st.selectbox("攻击分类", categories,
-                                         index=categories.index(st.session_state.selected_attack_category))
-        st.session_state.selected_attack_category = selected_category
-        
-        # 具体方法选择
-        methods = ATTACK_REGISTRY[selected_category]["methods"]
-        selected_method = st.selectbox("攻击方法", methods,
-                                       index=methods.index(st.session_state.selected_attack_method) if st.session_state.selected_attack_method in methods else 0)
-        st.session_state.selected_attack_method = selected_method
-        
-        # 预览载荷
-        payload_preview = generate_attack_payload(selected_category, selected_method)
-        st.text_area("MITM 注入载荷预览", payload_preview, height=120)
-        
-        # 写入标志文件和载荷文件
-        try:
-            with open(attack_flag_path, "w") as f:
-                f.write("enabled")
-            with open(payload_path, "w", encoding="utf-8") as f:
-                f.write(payload_preview)
-        except Exception as e:
-            st.error(f"写入 MITM 攻击标志失败: {e}")
+        if page == "🏫 校园问答":
+            st.markdown("<div style='background-color:#5c1a1a;color:#fff;border:1px solid #ef5350;padding:10px;border-radius:5px;'>红队模式已开启：mitmproxy 将自动注入所选载荷</div>", unsafe_allow_html=True)
+            from attack.prompt_injection import ATTACK_REGISTRY, generate_attack_payload
+            
+            # 攻击分类选择
+            categories = list(ATTACK_REGISTRY.keys())
+            selected_category = st.selectbox("攻击分类", categories,
+                                             index=categories.index(st.session_state.selected_attack_category))
+            st.session_state.selected_attack_category = selected_category
+            
+            # 具体方法选择
+            methods = ATTACK_REGISTRY[selected_category]["methods"]
+            selected_method = st.selectbox("攻击方法", methods,
+                                           index=methods.index(st.session_state.selected_attack_method) if st.session_state.selected_attack_method in methods else 0)
+            st.session_state.selected_attack_method = selected_method
+            
+            # 预览载荷
+            payload_preview = generate_attack_payload(selected_category, selected_method)
+            st.text_area("MITM 注入载荷预览", payload_preview, height=120)
+            
+            # 写入标志文件和载荷文件
+            try:
+                with open(attack_flag_path, "w") as f:
+                    f.write("enabled")
+                with open(payload_path, "w", encoding="utf-8") as f:
+                    f.write(payload_preview)
+            except Exception as e:
+                st.error(f"写入 MITM 攻击标志失败: {e}")
+        else:
+            st.markdown("<div style='background-color:#5c1a1a;color:#fff;border:1px solid #ef5350;padding:10px;border-radius:5px;'>红队模式已开启：MCP 流量将被中间人篡改</div>", unsafe_allow_html=True)
+            # MCP 模式下同样写入攻击标志，供 mitm_mcp_attack.py 使用
+            try:
+                with open(attack_flag_path, "w") as f:
+                    f.write("enabled")
+            except Exception as e:
+                st.error(f"写入 MITM 攻击标志失败: {e}")
     else:
         # 关闭时删除标志文件
         for path in [attack_flag_path, payload_path]:
@@ -209,9 +221,6 @@ with st.sidebar:
 # ========== 主界面 ==========
 st.title("🎓 校园智能问答机器人")
 st.caption("基于 Mimo API + RAG 检索增强 | 支持红蓝队攻防实验 | MCP 协议安全")
-
-# 页面切换
-page = st.radio("选择页面", ["🏫 校园问答", "🔌 MCP 协议攻防"], horizontal=True)
 
 if page == "🏫 校园问答":
     # ========== 校园问答页面 ==========

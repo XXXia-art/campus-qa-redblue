@@ -81,6 +81,17 @@ if ($Mode -eq "prompt" -or $Mode -eq "both") {
         exit
     }
 }
+if ($Mode -eq "mcp" -or $Mode -eq "both") {
+    $mcpScript = Join-Path $PSScriptRoot "mitm_mcp_attack.py"
+    if (Test-Path $mcpScript) {
+        $scriptArgs += "--scripts"
+        $scriptArgs += $mcpScript
+        Write-Host "Loaded MCP attack script: $mcpScript" -ForegroundColor Green
+    } else {
+        Write-Host "MCP attack script not found: $mcpScript" -ForegroundColor Red
+        exit
+    }
+}
 
 # Check ports
 function Test-PortOccupied($port) {

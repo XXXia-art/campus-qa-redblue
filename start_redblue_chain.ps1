@@ -1,11 +1,14 @@
 ﻿# Local Red/Blue Team Proxy Chain Launcher
 # Starts the blue-team defense proxy (downstream) and the red-team MITM proxy (upstream).
+# Loaded addons:
+#   - mitm_prompt_inject.py : LLM API prompt injection
+#   - mitm_mcp_attack.py    : MCP real API request tampering (wttr.in / ip-api.com)
 # Usage: .\start_redblue_chain.ps1 [-AttackMode prompt|mcp|both]
 
 param(
     [Parameter(Mandatory=$false)]
     [ValidateSet("mcp", "prompt", "both")]
-    [string]$AttackMode = "prompt",
+    [string]$AttackMode = "both",
 
     [Parameter(Mandatory=$false)]
     [string]$BlueListenPort = "8084",
@@ -65,14 +68,19 @@ if ($occupied) {
 
 $root = $PSScriptRoot
 $blueScript = Join-Path $root "mitm_blue_team.py"
-$redScript = Join-Path $root "mitm_prompt_inject.py"
+$promptScript = Join-Path $root "mitm_prompt_inject.py"
+$mcpScript = Join-Path $root "mitm_mcp_attack.py"
 
 if (-not (Test-Path $blueScript)) {
     Write-Host "ERROR: Blue team script not found: $blueScript" -ForegroundColor Red
     exit 1
 }
-if (-not (Test-Path $redScript)) {
-    Write-Host "ERROR: Red team script not found: $redScript" -ForegroundColor Red
+if (-not (Test-Path $promptScript)) {
+    Write-Host "ERROR: Prompt injection script not found: $promptScript" -ForegroundColor Red
+    exit 1
+}
+if (-not (Test-Path $mcpScript)) {
+    Write-Host "ERROR: MCP attack script not found: $mcpScript" -ForegroundColor Red
     exit 1
 }
 
@@ -89,13 +97,23 @@ Write-Host ""
 Write-Host "[*] Starting red-team MITM proxy..." -ForegroundColor Cyan
 $redCmdArgs = "--web-host 0.0.0.0 --web-port $RedWebPort --set web_password=mitm --listen-host 0.0.0.0 --listen-port $RedListenPort --showhost --mode upstream:http://127.0.0.1:$BlueListenPort --ssl-insecure"
 
+# 根据模式加载对应的红队 addon（默认 both 两个都加载）
+$loadedScripts = @()
 if ($AttackMode -eq "prompt" -or $AttackMode -eq "both") {
-    $redCmdArgs += " --scripts `"$redScript`""
+    $redCmdArgs += " --scripts `"$promptScript`""
+    $loadedScripts += "mitm_prompt_inject.py"
+}
+if ($AttackMode -eq "mcp" -or $AttackMode -eq "both") {
+    $redCmdArgs += " --scripts `"$mcpScript`""
+    $loadedScripts += "mitm_mcp_attack.py"
 }
 
 $redCmd = "mitmweb $redCmdArgs"
 $redProc = Start-Process cmd -ArgumentList "/c", $redCmd -PassThru -NoNewWindow
-Write-Host "    Red proxy PID: $($redProc.Id)  Web UI: http://localhost:$RedWebPort (password: mitm)" -ForegroundColor Green
+Write-Host "    Red proxy PID: $($redProc.Id)  Web UI: http://127.0.0.1:$RedWebPort (password: mitm)" -ForegroundColor Green
+if ($loadedScripts.Count -gt 0) {
+    Write-Host "    Loaded red-team addons: $($loadedScripts -join ', ')" -ForegroundColor Gray
+}
 
 Start-Sleep -Seconds 2
 
@@ -115,6 +133,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Blue web UI: http://127.0.0.1:$BlueWebPort" -ForegroundColor Yellow
 Write-Host "Red  web UI: http://127.0.0.1:$RedWebPort (password: mitm)" -ForegroundColor Yellow
+Write-Host "Mode: $AttackMode" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Next step: start Streamlit in a new window:" -ForegroundColor White
 Write-Host "  cd A:\The_code\kimi_chat" -ForegroundColor Gray
