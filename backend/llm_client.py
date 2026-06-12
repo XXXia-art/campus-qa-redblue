@@ -1,4 +1,20 @@
+import os
+
 from backend.config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
+
+
+def _has_proxy() -> bool:
+    """检查是否配置了 HTTP/HTTPS 代理（用于课堂 MITM 演示）"""
+    return bool(os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("http_proxy") or os.getenv("https_proxy"))
+
+
+def _create_http_client():
+    """创建 httpx client。如果配置了代理，关闭 SSL 证书验证以兼容 mitmproxy。"""
+    import httpx
+    if _has_proxy():
+        # MITM 演示模式：不验证证书，让 mitmproxy 可以拦截 HTTPS
+        return httpx.Client(verify=False)
+    return httpx.Client()
 
 
 def _is_anthropic_endpoint(url: str) -> bool:
@@ -23,16 +39,19 @@ class LLMClient:
         self.is_anthropic = _is_anthropic_endpoint(LLM_BASE_URL)
         self.model = LLM_MODEL
 
+        http_client = _create_http_client()
+
         if self.is_anthropic:
             from anthropic import Anthropic
             # Mimo 可能需要 Bearer Token 而不是 x-api-key
             self.client = Anthropic(
                 base_url=LLM_BASE_URL,
-                default_headers={"Authorization": f"Bearer {LLM_API_KEY}"}
+                default_headers={"Authorization": f"Bearer {LLM_API_KEY}"},
+                http_client=http_client,
             )
         else:
             from openai import OpenAI
-            self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+            self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL, http_client=http_client)
 
     def chat(self, system_prompt: str, user_prompt: str, temperature: float = 0.7) -> str:
         """调用 LLM API 进行对话"""
