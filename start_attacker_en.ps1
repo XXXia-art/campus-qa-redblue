@@ -71,14 +71,41 @@ if ($Mode -eq "prompt" -or $Mode -eq "both") {
 Write-Host ""
 Write-Host "Starting mitmproxy..." -ForegroundColor Green
 
+# Create temp dir for config and logs
+$tempDir = Join-Path $env:TEMP ("mitmweb-" + [System.Guid]::NewGuid().ToString())
+New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+
+# Write config.yaml with fixed web password
 $webPassword = "mitm"
-$baseArgs = @("--web-host", "0.0.0.0", "--web-port", "8081", "--set", "web_password=$webPassword", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
+$configFile = Join-Path $tempDir "config.yaml"
+"web_password: $webPassword" | Out-File -FilePath $configFile -Encoding utf8 -Force
+
+$logFile = Join-Path $tempDir "mitmweb.log"
+
+$baseArgs = @("--conf", $tempDir, "--web-host", "0.0.0.0", "--web-port", "8081", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
 $allArgs = $baseArgs + $scriptArgs
 
-$proc = Start-Process mitmweb -ArgumentList $allArgs -PassThru
-Write-Host "mitmproxy started (PID: $($proc.Id))" -ForegroundColor Green
+$proc = Start-Process mitmweb -ArgumentList $allArgs -PassThru -RedirectStandardOutput $logFile -RedirectStandardError $logFile
+Write-Host "mitmproxy starting (PID: $($proc.Id))" -ForegroundColor Green
+Write-Host "Config dir: $tempDir" -ForegroundColor Gray
 Write-Host "Web UI password: $webPassword" -ForegroundColor Yellow
-Write-Host "Web UI URL: http://localhost:8081/?token=$webPassword" -ForegroundColor Yellow
+
+# Wait for mitmweb to print the authentication token
+Start-Sleep -Seconds 3
+
+# Try to extract token from log
+$token = $webPassword
+if (Test-Path $logFile) {
+    $logContent = Get-Content $logFile -Raw -ErrorAction SilentlyContinue
+    if ($logContent -match '\?token=([a-f0-9]{32})') {
+        $token = $Matches[1]
+        Write-Host "Detected random token: $token" -ForegroundColor Cyan
+    }
+}
+
+$webUrl = "http://localhost:8081/?token=$token"
+Write-Host "Web UI URL: $webUrl" -ForegroundColor Yellow
+Start-Process $webUrl
 
 if ($Mode -eq "prompt" -or $Mode -eq "both") {
     Write-Host ""
@@ -107,11 +134,6 @@ if (Test-Path $ws1) {
 } else {
     Write-Host "Wireshark not found, start manually" -ForegroundColor Yellow
 }
-
-# Open browser
-Write-Host ""
-Write-Host "Opening mitmproxy web UI..." -ForegroundColor Green
-Start-Process "http://localhost:8081/?token=$webPassword"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -146,6 +168,12 @@ Read-Host "Press Enter to stop mitmproxy"
 if ($proc) {
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
     Write-Host "mitmproxy stopped" -ForegroundColor Green
+}
+
+# Cleanup temp config dir
+if ($tempDir -and (Test-Path $tempDir)) {
+    Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "Cleaned up temp files" -ForegroundColor Green
 }
 
 Write-Host "Bye!" -ForegroundColor Green
