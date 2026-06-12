@@ -41,13 +41,17 @@ Write-Host "mitmproxy started (PID: $($proc.Id))" -ForegroundColor Green
 # Start Wireshark
 Write-Host ""
 Write-Host "Starting Wireshark..." -ForegroundColor Green
-$ws1 = "C:\Program Files\Wireshark\Wireshark.exe"
-$ws2 = "C:\Program Files (x86)\Wireshark\Wireshark.exe"
+$ws1 = "D:\Wireshark\Wireshark.exe"
+$ws2 = "C:\Program Files\Wireshark\Wireshark.exe"
+$ws3 = "C:\Program Files (x86)\Wireshark\Wireshark.exe"
 if (Test-Path $ws1) {
     Start-Process $ws1
     Write-Host "Wireshark started" -ForegroundColor Green
 } elseif (Test-Path $ws2) {
     Start-Process $ws2
+    Write-Host "Wireshark started" -ForegroundColor Green
+} elseif (Test-Path $ws3) {
+    Start-Process $ws3
     Write-Host "Wireshark started" -ForegroundColor Green
 } else {
     Write-Host "Wireshark not found, start manually" -ForegroundColor Yellow
