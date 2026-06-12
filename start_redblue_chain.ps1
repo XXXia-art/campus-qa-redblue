@@ -1,4 +1,4 @@
-﻿# Local Red/Blue Team Proxy Chain Launcher
+﻿﻿# Local Red/Blue Team Proxy Chain Launcher
 # Starts the blue-team defense proxy (downstream) and the red-team MITM proxy (upstream).
 # Usage: .\start_redblue_chain.ps1 [-AttackMode prompt|mcp|both]
 
@@ -78,7 +78,7 @@ if (-not (Test-Path $redScript)) {
 
 # Start blue-team proxy (downstream, talks directly to the internet)
 Write-Host "[*] Starting blue-team defense proxy..." -ForegroundColor Cyan
-$blueCmd = "mitmweb --web-host 0.0.0.0 --web-port $BlueWebPort --listen-host 0.0.0.0 --listen-port $BlueListenPort --showhost --scripts `"$blueScript`""
+$blueCmd = "mitmweb --web-host 127.0.0.1 --web-port $BlueWebPort --listen-host 0.0.0.0 --listen-port $BlueListenPort --showhost --scripts `"$blueScript`""
 $blueProc = Start-Process cmd -ArgumentList "/c", $blueCmd -PassThru -NoNewWindow
 Write-Host "    Blue proxy PID: $($blueProc.Id)  Web UI: http://localhost:$BlueWebPort" -ForegroundColor Green
 
@@ -113,8 +113,8 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Red/Blue team proxies are running" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Blue web UI: http://localhost:$BlueWebPort" -ForegroundColor Yellow
-Write-Host "Red  web UI: http://localhost:$RedWebPort (password: mitm)" -ForegroundColor Yellow
+Write-Host "Blue web UI: http://127.0.0.1:$BlueWebPort" -ForegroundColor Yellow
+Write-Host "Red  web UI: http://127.0.0.1:$RedWebPort (password: mitm)" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Next step: start Streamlit in a new window:" -ForegroundColor White
 Write-Host "  cd A:\The_code\kimi_chat" -ForegroundColor Gray

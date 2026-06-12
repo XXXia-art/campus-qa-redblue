@@ -1,4 +1,4 @@
-﻿# MCP Security Lab - Attacker Console
+﻿﻿# MCP Security Lab - Attacker Console
 # Usage: .\start_attacker_en.ps1 [mcp|prompt|both]
 #   mcp    - Standard transparent proxy for MCP attacks (default)
 #   prompt - Inject malicious prompt into LLM API requests
@@ -168,7 +168,7 @@ if ($logContent -match '\?token=([a-f0-9]{32})') {
     Write-Host "Detected random token: $token" -ForegroundColor Cyan
 }
 
-$webUrl = "http://localhost:$WebPort/?token=$token"
+$webUrl = "http://127.0.0.1:$WebPort/?token=$token"
 Write-Host "Web UI URL: $webUrl" -ForegroundColor Yellow
 Start-Process $webUrl
 
