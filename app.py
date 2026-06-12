@@ -272,113 +272,25 @@ if page == "🏫 校园问答":
         st.session_state.history.append(result)
 
 else:
-    # ========== MCP 协议攻防页面 ==========
-    st.header("🔌 MCP (Model Context Protocol) 协议安全攻防")
+    # ========== MCP 真实 API Server 演示 ==========
+    st.header("🔌 MCP 真实 API Server 演示")
     st.markdown("""
     MCP 是 Anthropic 推出的开放协议，用于让 LLM Agent 连接外部工具和数据源。
-    本页面演示针对 MCP 协议的攻击场景及对应的防御措施，**支持真实调用工具**。
+    本页面连接一个真实的 MCP Server，工具会发出真实 HTTP 请求到 wttr.in / ip-api.com。
     """)
-    
-    from attack.mcp_attacks import MCPAttackDemo
-    from defense.mcp_defense import MCPDefenseEngine
+
     from backend.mcp_protocol import MCPClient
-    from backend.mcp_campus_server import create_campus_mcp_server
-    
-    # ========== 第一步：选择 Server 类型 ==========
-    server_mode = st.radio("选择 MCP Server", 
-                           ["✅ 正常校园 Server", "🌐 真实 API Server", "🔴 基础 MCP 攻击", "🔴 真实 API 攻击", "🕵️ 恶意代理攻击"], 
-                           horizontal=True)
-    
-    if server_mode == "✅ 正常校园 Server":
-        server = create_campus_mcp_server()
-        st.success(f"✅ 已启动正常 MCP Server: {server.name}")
-    elif server_mode == "🌐 真实 API Server":
-        from backend.mcp_real_api_server import create_real_api_mcp_server
-        server = create_real_api_mcp_server()
-        st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
-        st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
-    elif server_mode == "🔴 基础 MCP 攻击":
-        # 选择攻击场景
-        scenarios = MCPAttackDemo.list_scenarios()
-        scenario_key = st.selectbox("选择攻击场景", list(scenarios.keys()), 
-                                    format_func=lambda k: scenarios[k])
-        
-        scenario = MCPAttackDemo.get_scenario(scenario_key)
-        server_class = scenario["server_class"]
-        server = server_class()
-        
-        st.error(f"🔴 已启动恶意 MCP Server: {server.name}")
-        st.caption(f"攻击类型: {scenario['name']} — {scenario['description']}")
-    elif server_mode == "🔴 真实 API 攻击":
-        # 真实 API 攻击场景
-        from attack.mcp_real_api_attacks import REAL_API_ATTACK_REGISTRY
-        attack_keys = list(REAL_API_ATTACK_REGISTRY.keys())
-        attack_names = [REAL_API_ATTACK_REGISTRY[k]["name"] for k in attack_keys]
-        
-        selected_attack = st.selectbox("选择真实 API 攻击场景", attack_keys,
-                                       format_func=lambda k: REAL_API_ATTACK_REGISTRY[k]["name"])
-        
-        attack_info = REAL_API_ATTACK_REGISTRY[selected_attack]
-        server = attack_info["server_class"]()
-        
-        st.error(f"🔴 已启动真实 API 攻击 Server: {server.name}")
-        st.caption(f"攻击类型: {attack_info['name']} — {attack_info['description']}")
-        
-        # 显示攻击载荷
-        with st.expander("💣 攻击载荷示例（点击填入）"):
-            for payload_name, payload_value in attack_info["payloads"].items():
-                if st.button(f"填入: {payload_name} = `{payload_value}`", key=f"payload_{payload_name}"):
-                    st.session_state[f"mcp_inject_{selected_attack}"] = payload_value
-                    st.rerun()
-    else:
-        # ========== 恶意代理攻击 ==========
-        from backend.mcp_proxy_attacks import (
-            MaliciousProxyServer, create_sniffer_proxy, 
-            create_mitm_proxy, create_exfil_proxy
-        )
-        
-        st.header("🕵️ 恶意 MCP 代理攻击（真实流量拦截）")
-        st.markdown("""
-        本模式下，MCP Server 作为**中间人代理**：
-        1. 接收 Client 的请求
-        2. **真实拦截** HTTP 请求/响应（抓包）
-        3. **篡改**请求参数或响应内容
-        4. **外泄**数据到第三方服务器（httpbin.org）
-        5. 转发到真实 API
-        """)
-        
-        proxy_mode = st.selectbox("选择代理攻击模式", [
-            "sniff_only",
-            "tamper_request", 
-            "tamper_response",
-            "exfiltrate_data",
-            "full_mitm"
-        ], format_func=lambda x: {
-            "sniff_only": "📡 仅抓包（记录所有流量）",
-            "tamper_request": "✏️ 篡改请求（修改参数后发给真实API）",
-            "tamper_response": "🔧 篡改响应（修改真实API返回结果）",
-            "exfiltrate_data": "📤 数据外泄（把请求数据发到外部服务器）",
-            "full_mitm": "☠️ 完整MITM（篡改+外泄同时进行）",
-        }.get(x, x))
-        
-        # 创建代理 Server
-        server = MaliciousProxyServer()
-        server.set_attack_mode(proxy_mode)
-        
-        # 外泄目标配置
-        if "exfil" in proxy_mode or proxy_mode == "full_mitm":
-            exfil_target = st.text_input("外泄目标 URL", value="https://httpbin.org/post")
-            server.exfiltrate_target = exfil_target
-            st.warning(f"⚠️ 请求数据将被**真实发送**到: {exfil_target}")
-            st.info("验证方式：调用工具后，访问 https://httpbin.org/get 或查看下方抓包记录")
-        
-        st.error(f"🕵️ 已启动恶意代理: {server.name} | 模式: {proxy_mode}")
-    
-    # 用 Client 连接 Server
+    from backend.mcp_real_api_server import create_real_api_mcp_server
+    from defense.mcp_defense import MCPDefenseEngine
+
+    server = create_real_api_mcp_server()
+    st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
+    st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
+
     client = MCPClient()
     client.connect(server)
-    
-    # ========== 第二步：Server 信息展示 ==========
+
+    # Server 信息展示
     with st.expander("📋 查看 MCP Server 配置"):
         info_cols = st.columns(2)
         with info_cols[0]:
@@ -388,98 +300,55 @@ else:
             st.markdown(f"**已发现工具 ({len(client.discovered_tools)} 个)**")
             for tool in client.discovered_tools:
                 st.write(f"- `{tool['name']}`: {tool['description']}")
-    
-    # ========== 第三步：真实工具调用 ==========
+
+    # 工具调用测试
     st.divider()
     st.subheader("🛠️ 工具调用测试")
-    
+
     if not client.discovered_tools:
         st.info("该 Server 没有注册任何工具")
     else:
         tool_names = [t["name"] for t in client.discovered_tools]
         selected_tool_name = st.selectbox("选择要调用的工具", tool_names)
-        
-        # 获取工具参数
+
         selected_tool = None
         for t in server.tools.values():
             if t.name == selected_tool_name:
                 selected_tool = t
                 break
-        
+
         if selected_tool:
-            # 动态生成参数输入框
             args = {}
             if selected_tool.parameters:
                 param_cols = st.columns(min(len(selected_tool.parameters), 3))
                 for idx, (param_name, param_info) in enumerate(selected_tool.parameters.items()):
                     with param_cols[idx % 3]:
                         default_val = ""
-                        
-                        # 检查是否有预置的攻击载荷
-                        inject_key = None
-                        for key in st.session_state:
-                            if key.startswith("mcp_inject_"):
-                                inject_key = key
-                                break
-                        
-                        if inject_key and param_name in ["city", "ip_list", "ip"]:
-                            default_val = st.session_state[inject_key]
-                        elif param_name == "book_name":
-                            default_val = "人工智能导论"
-                        elif param_name == "card_id":
-                            default_val = "22020001"
-                        elif param_name == "student_id":
-                            default_val = "22020001"
-                        elif param_name == "date":
-                            default_val = "2024-01-15"
-                        elif param_name == "data_source":
-                            default_val = "/campus/student_records.db"
-                        elif param_name == "report_type":
-                            default_val = "成绩统计"
-                        elif param_name == "to":
-                            default_val = "admin@seu.edu.cn"
-                        elif param_name == "subject":
-                            default_val = "校园通知"
-                        elif param_name == "body":
-                            default_val = "这是一条测试通知"
-                        elif param_name == "command":
-                            default_val = "cat /etc/passwd"
-                        elif param_name == "campus":
-                            default_val = "九龙湖"
-                        elif param_name == "direction":
-                            default_val = "四牌楼→九龙湖"
-                        elif param_name == "keyword":
-                            default_val = "安全须知"
-                        
+                        if param_name == "city":
+                            default_val = "Nanjing"
+                        elif param_name == "ip":
+                            default_val = "8.8.8.8"
                         args[param_name] = st.text_input(
                             f"{param_name} ({param_info.get('description', '')})",
                             value=default_val,
                             key=f"mcp_param_{param_name}"
                         )
-            
+
             if st.button("▶️ 调用工具", type="primary"):
                 with st.spinner("正在调用 MCP 工具..."):
                     result = client.call_tool(selected_tool_name, **args)
-                
+
                 st.markdown("**调用结果：**")
                 if result.get("success"):
-                    # 处理恶意工具的隐藏行为展示
-                    result_data = result.get("result", {})
-                    if isinstance(result_data, dict) and result_data.get("warning"):
-                        st.error(result_data["warning"])
-                        st.json(result_data)
-                    else:
-                        st.success("工具调用成功")
-                        st.json(result_data)
+                    st.success("工具调用成功")
+                    st.json(result.get("result", {}))
                 else:
                     st.error(f"调用失败: {result.get('error')}")
-    
-    # ========== 第四步：防御检测 ==========
+
+    # 安全检查
     st.divider()
-    st.subheader("🔵 防御检测")
+    st.subheader("🔵 MCP Server 安全检查")
     defense = MCPDefenseEngine()
-    
-    # 综合检查
     perms = getattr(server, 'requested_permissions', [])
     report = defense.inspect_server({
         "name": server.name,
@@ -487,102 +356,12 @@ else:
         "permissions": perms,
         "tools": server.list_tools(),
     })
-    
+
     if report["overall_safe"]:
         st.success("✅ 综合检查通过 — 该 MCP Server 安全风险较低")
     else:
         st.error("🚫 检测到安全风险！请谨慎使用该 Server")
-    
-    # 详细报告
-    detail_cols = st.columns(2)
-    with detail_cols[0]:
-        with st.expander("权限风险评估"):
-            perm = report["details"]["permissions"]
-            st.markdown(f"**风险等级**: `{perm['risk_level'].upper()}`")
-            st.write(f"- 高危权限 ({len(perm['high_risk'])}): {', '.join(perm['high_risk']) or '无'}")
-            st.write(f"- 中危权限 ({len(perm['medium_risk'])}): {', '.join(perm['medium_risk']) or '无'}")
-            st.write(f"- 低危权限 ({len(perm['low_risk'])}): {', '.join(perm['low_risk']) or '无'}")
-    
-    with detail_cols[1]:
-        with st.expander("工具安全验证"):
-            tools = report["details"]["tools"]
-            st.markdown(f"**验证结果**: {'✅ 全部通过' if tools['all_safe'] else '❌ 发现问题'}")
-            for r in tools["tool_results"]:
-                if r["warnings"]:
-                    for w in r["warnings"]:
-                        st.warning(w)
-            if tools["duplicate_tools"]:
-                st.error(f"检测到同名工具冲突: {', '.join(tools['duplicate_tools'])}")
-    
-    # 防御建议
+
     if report["recommendations"]:
-        st.markdown("#### 🛡️ 防御建议")
         for rec in report["recommendations"]:
             st.info(rec)
-    
-    # ========== 第五步：恶意代理的抓包展示 ==========
-    if server_mode == "🕵️ 恶意代理攻击" and isinstance(server, MaliciousProxyServer):
-        st.divider()
-        st.header("📡 抓包记录（真实 HTTP 流量）")
-        
-        records = server.get_records()
-        if not records:
-            st.info("暂无抓包记录，请先调用工具")
-        else:
-            st.write(f"已拦截 **{len(records)}** 条 HTTP 流量")
-            
-            for rec in records:
-                icon = "📡"
-                if rec["tampered_request"] and rec["tampered_response"]:
-                    icon = "☠️"
-                elif rec["tampered_request"]:
-                    icon = "✏️"
-                elif rec["tampered_response"]:
-                    icon = "🔧"
-                elif rec["exfiltrated"]:
-                    icon = "📤"
-                
-                with st.expander(f"{icon} #{rec['id']} {rec['method']} {rec['url'][:60]}... ({rec['status']}) {rec['time_ms']}ms"):
-                    cols = st.columns(2)
-                    
-                    with cols[0]:
-                        st.markdown("**📤 请求**")
-                        st.markdown(f"```\n{rec['method']} {rec['url']}\n```")
-                        if rec.get("tamper_details"):
-                            st.error(f"🚨 攻击操作: {rec['tamper_details']}")
-                    
-                    with cols[1]:
-                        st.markdown("**📥 响应**")
-                        st.markdown(f"```\nHTTP {rec['status']}\nTime: {rec['time_ms']}ms\n```")
-                        if rec["exfiltrated"]:
-                            st.error(f"📤 数据已外泄到: {rec['exfiltrate_target']}")
-                    
-                    # 详细请求/响应体
-                    detail = server.get_record_detail(rec["id"])
-                    if detail:
-                        st.markdown("**请求体：**")
-                        st.code(detail.request_body[:500], language="json")
-                        st.markdown("**响应体（前 800 字符）：**")
-                        st.code(detail.response_body[:800], language="json")
-            
-            if st.button("🗑️ 清空抓包记录"):
-                server.clear_records()
-                st.rerun()
-    
-    # 资源清洗演示（针对间接注入）
-    if server_mode == "🔴 基础 MCP 攻击" and scenario_key == "indirect_injection":
-        st.divider()
-        st.subheader("📄 资源内容清洗演示")
-        resource = server.read_resource("campus_safety_guide")
-        if resource.get("success"):
-            sanitized = defense.inspect_resource(resource["content"])
-            
-            clean_cols = st.columns(2)
-            with clean_cols[0]:
-                st.markdown("**原始内容（含毒化指令）**")
-                st.code(resource["content"], language="text")
-            with clean_cols[1]:
-                st.markdown("**清洗后内容**")
-                if not sanitized["safe"]:
-                    st.error(f"检测到威胁标记: {', '.join(sanitized['threats'])}")
-                st.code(sanitized["cleaned"], language="text")
