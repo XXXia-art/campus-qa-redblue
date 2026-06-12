@@ -1,9 +1,46 @@
 import os
+
+# HuggingFace 国内镜像配置
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 import chromadb
 from sentence_transformers import SentenceTransformer
 from backend.config import EMBEDDING_MODEL, VECTOR_DB_PATH
+
+
+def _load_embedding_model(model_name: str):
+    """加载 Embedding 模型，优先本地缓存，其次自动下载"""
+    # 1. 优先从项目本地 models 目录加载（手动下载放这里）
+    local_path = os.path.join("models", model_name.replace("/", os.sep))
+    if os.path.exists(local_path):
+        print(f"📦 从本地加载模型: {local_path}")
+        return SentenceTransformer(local_path)
+
+    # 2. 尝试从本地 HuggingFace 缓存加载
+    try:
+        return SentenceTransformer(model_name, local_files_only=True)
+    except Exception:
+        pass
+
+    # 3. 尝试从 hf-mirror 自动下载
+    print(f"🔄 尝试从 hf-mirror.com 下载模型: {model_name} ...")
+    try:
+        from huggingface_hub import snapshot_download
+        cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+        model_path = snapshot_download(
+            repo_id=model_name,
+            cache_dir=cache_dir,
+            local_files_only=False,
+            endpoint="https://hf-mirror.com",
+        )
+        return SentenceTransformer(model_path)
+    except Exception as e:
+        raise RuntimeError(
+            f"模型加载失败。请手动从 https://hf-mirror.com/{model_name} 下载所有文件，"
+            f"放到项目目录的 models/{model_name.replace('/', os.sep)}/ 下。\n"
+            f"错误: {e}"
+        )
 
 
 class VectorStore:
@@ -12,9 +49,8 @@ class VectorStore:
     def __init__(self, collection_name: str = "campus_docs"):
         self.client = chromadb.PersistentClient(path=VECTOR_DB_PATH)
         self.collection = self.client.get_or_create_collection(name=collection_name)
-        # 本地 Embedding 模型（首次会自动从 HuggingFace 下载）
         print(f"🔄 正在加载 Embedding 模型: {EMBEDDING_MODEL} ...")
-        self.embedding_model = SentenceTransformer(EMBEDDING_MODEL)
+        self.embedding_model = _load_embedding_model(EMBEDDING_MODEL)
         print("✅ Embedding 模型加载完成")
 
     def add_documents(self, documents: list, ids: list = None, metadatas: list = None):

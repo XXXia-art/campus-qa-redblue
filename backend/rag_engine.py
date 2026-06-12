@@ -1,4 +1,4 @@
-from backend.llm_client import KimiClient
+from backend.llm_client import LLMClient
 from backend.vector_store import VectorStore
 from backend.document_loader import DocumentLoader
 from backend.config import CHUNK_SIZE, CHUNK_OVERLAP, TOP_K
@@ -8,7 +8,7 @@ class RAGEngine:
     """RAG 问答引擎：检索 + 生成"""
 
     def __init__(self):
-        self.llm = KimiClient()
+        self.llm = LLMClient()
         self.vector_store = VectorStore()
 
     def ingest_document(self, file_path: str):

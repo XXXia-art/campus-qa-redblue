@@ -16,6 +16,12 @@ ENV/
 # ChromaDB 向量数据库缓存（体积大，可重建）
 chroma_db/
 
+# 本地 Embedding 模型（体积大，可手动下载）
+models/
+
+# 攻击日志（运行时生成）
+attack_logs.json
+
 # 临时上传文件
 temp_uploads/
 
