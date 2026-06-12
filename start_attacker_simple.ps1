@@ -63,7 +63,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "环境启动完成！" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "参与者操作：" -ForegroundColor White
-Write-Host "  1. 连接热点 MCP-Lab / seu2024" -ForegroundColor Gray
+Write-Host "  1. 连接热点 MCP-Lab / seu2024." -ForegroundColor Gray
 Write-Host "  2. 设置代理 $hotspotIP`:8080" -ForegroundColor Gray
 Write-Host "  3. 安装证书 http://mitm.it" -ForegroundColor Gray
 Write-Host "  4. 启动 Streamlit" -ForegroundColor Gray

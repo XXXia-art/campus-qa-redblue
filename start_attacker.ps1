@@ -104,7 +104,7 @@ Write-Host "  🎉 攻击者环境启动完成！" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "📋 操作清单：" -ForegroundColor White
-Write-Host "   1. 让参与者连接热点: MCP-Lab / seu2024" -ForegroundColor Gray
+Write-Host "   1. 让参与者连接热点: MCP-Lab / seu2024." -ForegroundColor Gray
 Write-Host "   2. 让参与者设置代理: $hotspotIP`:8080" -ForegroundColor Gray
 Write-Host "   3. 让参与者安装证书: http://mitm.it" -ForegroundColor Gray
 Write-Host "   4. 让参与者启动 Streamlit" -ForegroundColor Gray
