@@ -71,11 +71,14 @@ if ($Mode -eq "prompt" -or $Mode -eq "both") {
 Write-Host ""
 Write-Host "Starting mitmproxy..." -ForegroundColor Green
 
-$baseArgs = @("--web-host", "0.0.0.0", "--web-port", "8081", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
+$webPassword = "mitm"
+$baseArgs = @("--web-host", "0.0.0.0", "--web-port", "8081", "--set", "web_password=$webPassword", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
 $allArgs = $baseArgs + $scriptArgs
 
 $proc = Start-Process mitmweb -ArgumentList $allArgs -PassThru
 Write-Host "mitmproxy started (PID: $($proc.Id))" -ForegroundColor Green
+Write-Host "Web UI password: $webPassword" -ForegroundColor Yellow
+Write-Host "Web UI URL: http://localhost:8081/?token=$webPassword" -ForegroundColor Yellow
 
 if ($Mode -eq "prompt" -or $Mode -eq "both") {
     Write-Host ""
@@ -108,7 +111,7 @@ if (Test-Path $ws1) {
 # Open browser
 Write-Host ""
 Write-Host "Opening mitmproxy web UI..." -ForegroundColor Green
-Start-Process "http://localhost:8081"
+Start-Process "http://localhost:8081/?token=$webPassword"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
