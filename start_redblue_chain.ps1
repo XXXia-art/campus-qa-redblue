@@ -1,6 +1,6 @@
-# 本机红蓝队一体化代理启动脚本
-# 一键启动：蓝队防御代理（下游） + 攻击者 MITM 代理（上游）
-# 用法：.\start_redblue_chain.ps1 [-AttackMode prompt|mcp|both]
+﻿# Local Red/Blue Team Proxy Chain Launcher
+# Starts the blue-team defense proxy (downstream) and the red-team MITM proxy (upstream).
+# Usage: .\start_redblue_chain.ps1 [-AttackMode prompt|mcp|both]
 
 param(
     [Parameter(Mandatory=$false)]
@@ -22,22 +22,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Test-Mitmproxy {
+function Test-MitmproxyInstalled {
     $cmd = Get-Command mitmweb -ErrorAction SilentlyContinue
     if (-not $cmd) {
-        Write-Host "❌ mitmweb 命令未找到，请先激活 conda 环境或安装 mitmproxy：pip install mitmproxy" -ForegroundColor Red
+        Write-Host "ERROR: mitmweb not found. Activate conda env or run: pip install mitmproxy" -ForegroundColor Red
         exit 1
     }
 }
 
-function Test-Port($port) {
+function Test-PortOccupied($port) {
     $conns = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
     if ($conns) {
         $procIds = $conns | Select-Object -ExpandProperty OwningProcess -Unique
         foreach ($procId in $procIds) {
             $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
             if ($p) {
-                Write-Host "⚠️ 端口 $port 被占用: $($p.ProcessName) (PID: $procId)" -ForegroundColor Yellow
+                Write-Host "WARNING: Port $port is occupied by $($p.ProcessName) (PID: $procId)" -ForegroundColor Yellow
             }
         }
         return $true
@@ -46,21 +46,20 @@ function Test-Port($port) {
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  红蓝队一体化代理启动器（本机测试）" -ForegroundColor Cyan
+Write-Host "  Red/Blue Team Proxy Chain Launcher" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-Test-Mitmproxy
+Test-MitmproxyInstalled
 
-# 检查端口占用
 $ports = @($BlueListenPort, $BlueWebPort, $RedListenPort, $RedWebPort)
 $occupied = $false
 foreach ($p in $ports) {
-    if (Test-Port $p) { $occupied = $true }
+    if (Test-PortOccupied $p) { $occupied = $true }
 }
 if ($occupied) {
     Write-Host ""
-    Write-Host "❌ 请先释放以上端口，或修改启动参数使用其他端口。" -ForegroundColor Red
+    Write-Host "ERROR: One or more ports are occupied. Free them or use different ports." -ForegroundColor Red
     exit 1
 }
 
@@ -69,25 +68,25 @@ $blueScript = Join-Path $root "mitm_blue_team.py"
 $redScript = Join-Path $root "mitm_prompt_inject.py"
 
 if (-not (Test-Path $blueScript)) {
-    Write-Host "❌ 未找到蓝队脚本: $blueScript" -ForegroundColor Red
+    Write-Host "ERROR: Blue team script not found: $blueScript" -ForegroundColor Red
     exit 1
 }
 if (-not (Test-Path $redScript)) {
-    Write-Host "❌ 未找到红队脚本: $redScript" -ForegroundColor Red
+    Write-Host "ERROR: Red team script not found: $redScript" -ForegroundColor Red
     exit 1
 }
 
-# 启动蓝队代理（下游，直接连互联网）
-Write-Host "🛡️  启动蓝队防御代理..." -ForegroundColor Cyan
+# Start blue-team proxy (downstream, talks directly to the internet)
+Write-Host "[*] Starting blue-team defense proxy..." -ForegroundColor Cyan
 $blueCmd = "mitmweb --web-host 0.0.0.0 --web-port $BlueWebPort --listen-host 0.0.0.0 --listen-port $BlueListenPort --showhost --scripts `"$blueScript`""
 $blueProc = Start-Process cmd -ArgumentList "/c", $blueCmd -PassThru -NoNewWindow
-Write-Host "   蓝队代理 PID: $($blueProc.Id)  |  面板: http://localhost:$BlueWebPort" -ForegroundColor Green
+Write-Host "    Blue proxy PID: $($blueProc.Id)  Web UI: http://localhost:$BlueWebPort" -ForegroundColor Green
 
 Start-Sleep -Seconds 2
 
-# 启动攻击者代理（上游指向蓝队代理）
+# Start red-team MITM proxy (upstream points to blue-team proxy)
 Write-Host ""
-Write-Host "🔴 启动攻击者 MITM 代理..." -ForegroundColor Cyan
+Write-Host "[*] Starting red-team MITM proxy..." -ForegroundColor Cyan
 $redCmdArgs = "--web-host 0.0.0.0 --web-port $RedWebPort --set web_password=mitm --listen-host 0.0.0.0 --listen-port $RedListenPort --showhost --mode upstream:http://127.0.0.1:$BlueListenPort --ssl-insecure"
 
 if ($AttackMode -eq "prompt" -or $AttackMode -eq "both") {
@@ -96,32 +95,32 @@ if ($AttackMode -eq "prompt" -or $AttackMode -eq "both") {
 
 $redCmd = "mitmweb $redCmdArgs"
 $redProc = Start-Process cmd -ArgumentList "/c", $redCmd -PassThru -NoNewWindow
-Write-Host "   红队代理 PID: $($redProc.Id)  |  面板: http://localhost:$RedWebPort" -ForegroundColor Green
+Write-Host "    Red proxy PID: $($redProc.Id)  Web UI: http://localhost:$RedWebPort (password: mitm)" -ForegroundColor Green
 
 Start-Sleep -Seconds 2
 
-# 检查进程是否还在
 if ($blueProc.HasExited) {
-    Write-Host "❌ 蓝队代理启动失败" -ForegroundColor Red
+    Write-Host "ERROR: Blue-team proxy exited unexpectedly." -ForegroundColor Red
     exit 1
 }
 if ($redProc.HasExited) {
-    Write-Host "❌ 红队代理启动失败" -ForegroundColor Red
+    Write-Host "ERROR: Red-team proxy exited unexpectedly." -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "✅ 红蓝队代理已启动" -ForegroundColor Green
+Write-Host "  Red/Blue team proxies are running" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "蓝队面板: http://localhost:$BlueWebPort" -ForegroundColor Yellow
-Write-Host "红队面板: http://localhost:$RedWebPort  （密码: mitm）" -ForegroundColor Yellow
+Write-Host "Blue web UI: http://localhost:$BlueWebPort" -ForegroundColor Yellow
+Write-Host "Red  web UI: http://localhost:$RedWebPort (password: mitm)" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "下一步：在第三个窗口启动 Streamlit" -ForegroundColor White
+Write-Host "Next step: start Streamlit in a new window:" -ForegroundColor White
 Write-Host "  cd A:\The_code\kimi_chat" -ForegroundColor Gray
 Write-Host "  `$env:HTTP_PROXY=`"http://127.0.0.1:$RedListenPort`"" -ForegroundColor Gray
 Write-Host "  `$env:HTTPS_PROXY=`"http://127.0.0.1:$RedListenPort`"" -ForegroundColor Gray
 Write-Host "  streamlit run app.py" -ForegroundColor Gray
 Write-Host ""
-Write-Host "关闭本窗口不会停止代理，需要时手动结束 PID $($blueProc.Id) 和 $($redProc.Id)" -ForegroundColor Gray
+Write-Host "Note: closing this window will NOT stop the proxies." -ForegroundColor Gray
+Write-Host "      Stop them manually with: Get-Process mitmweb | Stop-Process" -ForegroundColor Gray
