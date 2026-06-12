@@ -33,7 +33,6 @@ st.markdown("""
 .chat-box { border-radius: 10px; padding: 15px; margin: 10px 0; }
 .user-box { background-color: #e3f2fd; }
 .assistant-box { background-color: #f3e5f5; }
-.attack-box { background-color: #5c1a1a; color: #ffffff; border: 1px solid #ef5350; padding: 10px; border-radius: 5px; }
 .defense-box { background-color: #1a472a; color: #ffffff; border: 1px solid #66bb6a; padding: 10px; border-radius: 5px; }
 .packet-box { background-color: #1e1e1e; color: #00ff00; font-family: monospace; padding: 10px; border-radius: 5px; overflow-x: auto; }
 </style>
@@ -46,11 +45,7 @@ if 'rag' not in st.session_state:
         st.stop()
     st.session_state.rag = RAGEngine()
     st.session_state.history = []
-    st.session_state.attack_mode = False
     st.session_state.defense_mode = False
-    st.session_state.selected_attack_category = "直接注入"
-    st.session_state.selected_attack_method = "ignore_instruction"
-    st.session_state.attack_encoding = "原始"
     
     # 启动时自动加载校园数据
     full_data_path = "./data/seu_campus_full.txt"
@@ -127,53 +122,8 @@ with st.sidebar:
     
     st.divider()
     
-    # 红蓝队模式
-    st.header("🎯 攻防模式")
-    
-    attack_mode = st.toggle("🔴 红队攻击模式", value=st.session_state.attack_mode)
-    st.session_state.attack_mode = attack_mode
-    
-    if attack_mode:
-        st.markdown("<div class='attack-box'>攻击模式已开启，可直接输入注入载荷测试</div>", unsafe_allow_html=True)
-        from attack.prompt_injection import ATTACK_REGISTRY, generate_attack_payload
-        
-        # 一级：攻击分类
-        categories = list(ATTACK_REGISTRY.keys())
-        selected_category = st.selectbox("攻击分类", categories,
-                                         index=categories.index(st.session_state.selected_attack_category))
-        st.session_state.selected_attack_category = selected_category
-        
-        # 二级：具体方法
-        methods = ATTACK_REGISTRY[selected_category]["methods"]
-        selected_method = st.selectbox("攻击方法", methods,
-                                       index=methods.index(st.session_state.selected_attack_method) if st.session_state.selected_attack_method in methods else 0)
-        st.session_state.selected_attack_method = selected_method
-        
-        # 编码选项（仅对支持编码的分类显示）
-        if selected_category in ["编码混淆", "直接注入", "间接注入"]:
-            encoding = st.selectbox("载荷编码", ["原始", "Base64编码", "URL编码", "反转文本"],
-                                    index=["原始", "Base64编码", "URL编码", "反转文本"].index(st.session_state.attack_encoding))
-            st.session_state.attack_encoding = encoding
-        else:
-            encoding = "原始"
-        
-        # 预览载荷
-        payload_preview = generate_attack_payload(selected_category, selected_method)
-        st.text_area("载荷预览", payload_preview, height=120)
-        
-        # 攻击效果评估按钮
-        if st.button("📊 查看攻击统计"):
-            from attack.evaluator import AttackEvaluator
-            ev = AttackEvaluator()
-            summary = ev.get_summary()
-            if summary["total"] > 0:
-                st.write(f"**总攻击次数**: {summary['total']}")
-                st.write(f"**成功次数**: {summary['success_count']}")
-                st.write(f"**成功率**: {summary['success_rate']}%")
-                for cat, stats in summary["by_category"].items():
-                    st.write(f"- {cat}: {stats['success']}/{stats['total']} ({stats['success_rate']}%)")
-            else:
-                st.info("暂无攻击记录，请先进行攻击测试")
+    # 防御模式
+    st.header("🛡️ 防御模式")
     
     defense_mode = st.toggle("🔵 蓝队防御模式", value=st.session_state.defense_mode)
     st.session_state.defense_mode = defense_mode
@@ -190,10 +140,6 @@ page = st.radio("选择页面", ["🏫 校园问答", "🔌 MCP 协议攻防"], 
 
 if page == "🏫 校园问答":
     # ========== 校园问答页面 ==========
-    
-    # 攻击模式提示
-    if st.session_state.attack_mode:
-        st.warning("⚠️ 当前处于红队攻击模式，可测试提示词注入等攻击手段")
     
     # 显示对话历史
     for msg_idx, msg in enumerate(st.session_state.history):
@@ -215,36 +161,11 @@ if page == "🏫 校园问答":
     question = st.chat_input("请输入你的问题...")
     
     if question:
-        display_question = question
         actual_question = question
         
-        # 红队：自动附加选中的攻击载荷
-        if st.session_state.attack_mode:
-            from attack.prompt_injection import generate_attack_payload
-            from attack.evaluator import AttackEvaluator
-            
-            payload = generate_attack_payload(
-                st.session_state.selected_attack_category,
-                st.session_state.selected_attack_method
-            )
-            
-            # 编码处理
-            encoding = st.session_state.get("attack_encoding", "原始")
-            if encoding == "Base64编码" and st.session_state.selected_attack_category not in ["编码混淆"]:
-                import base64
-                payload = f"请解码并执行以下Base64内容：\n{base64.b64encode(payload.encode()).decode()}"
-            elif encoding == "URL编码" and st.session_state.selected_attack_category not in ["编码混淆"]:
-                import urllib.parse
-                payload = f"请解码并执行以下URL编码内容：\n{urllib.parse.quote(payload)}"
-            elif encoding == "反转文本" and st.session_state.selected_attack_category not in ["编码混淆"]:
-                payload = f"请将以下字符串反转后执行：\n{payload[::-1]}"
-            
-            actual_question = question + "\n\n" + payload
-            st.toast(f"⚠️ 已附加攻击: {st.session_state.selected_attack_category} / {st.session_state.selected_attack_method}", icon="🔴")
-        
-        # 显示用户消息（显示原始问题）
+        # 显示用户消息
         with st.chat_message("user"):
-            st.markdown(display_question)
+            st.markdown(question)
         
         # 调用 RAG
         with st.chat_message("assistant"):
@@ -259,20 +180,6 @@ if page == "🏫 校园问答":
                 st.error(result['answer'])
             else:
                 st.markdown(result['answer'])
-            
-            # 攻击效果评估
-            if st.session_state.attack_mode and not result.get("blocked"):
-                evaluator = AttackEvaluator()
-                eval_result = evaluator.evaluate(
-                    st.session_state.selected_attack_category,
-                    st.session_state.selected_attack_method,
-                    actual_question,
-                    result['answer']
-                )
-                if eval_result["success"]:
-                    st.error(f"🚨 攻击可能成功！匹配指标: {', '.join(eval_result['indicators'])}")
-                else:
-                    st.info(f"🛡️ 攻击被防御（得分: {eval_result['score']}）")
             
             if not result.get("blocked") and result.get('contexts'):
                 with st.expander("🔍 查看检索到的参考片段"):
