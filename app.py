@@ -45,7 +45,10 @@ if 'rag' not in st.session_state:
         st.stop()
     st.session_state.rag = RAGEngine()
     st.session_state.history = []
+    st.session_state.attack_mode = False
     st.session_state.defense_mode = False
+    st.session_state.selected_attack_category = "直接注入"
+    st.session_state.selected_attack_method = "ignore_instruction"
     
     # 启动时自动加载校园数据
     full_data_path = "./data/seu_campus_full.txt"
@@ -122,8 +125,52 @@ with st.sidebar:
     
     st.divider()
     
-    # 防御模式
-    st.header("🛡️ 防御模式")
+    # 红蓝队模式
+    st.header("🎯 攻防模式")
+    
+    attack_mode = st.toggle("🔴 红队攻击模式（MITM 注入）", value=st.session_state.attack_mode)
+    st.session_state.attack_mode = attack_mode
+    
+    # MITM 攻击标志文件路径
+    attack_flag_path = os.path.join(os.path.dirname(__file__), ".mitm_attack_mode")
+    payload_path = os.path.join(os.path.dirname(__file__), ".mitm_payload")
+    
+    if attack_mode:
+        st.markdown("<div style='background-color:#5c1a1a;color:#fff;border:1px solid #ef5350;padding:10px;border-radius:5px;'>红队模式已开启：mitmproxy 将自动注入所选载荷</div>", unsafe_allow_html=True)
+        from attack.prompt_injection import ATTACK_REGISTRY, generate_attack_payload
+        
+        # 攻击分类选择
+        categories = list(ATTACK_REGISTRY.keys())
+        selected_category = st.selectbox("攻击分类", categories,
+                                         index=categories.index(st.session_state.selected_attack_category))
+        st.session_state.selected_attack_category = selected_category
+        
+        # 具体方法选择
+        methods = ATTACK_REGISTRY[selected_category]["methods"]
+        selected_method = st.selectbox("攻击方法", methods,
+                                       index=methods.index(st.session_state.selected_attack_method) if st.session_state.selected_attack_method in methods else 0)
+        st.session_state.selected_attack_method = selected_method
+        
+        # 预览载荷
+        payload_preview = generate_attack_payload(selected_category, selected_method)
+        st.text_area("MITM 注入载荷预览", payload_preview, height=120)
+        
+        # 写入标志文件和载荷文件
+        try:
+            with open(attack_flag_path, "w") as f:
+                f.write("enabled")
+            with open(payload_path, "w", encoding="utf-8") as f:
+                f.write(payload_preview)
+        except Exception as e:
+            st.error(f"写入 MITM 攻击标志失败: {e}")
+    else:
+        # 关闭时删除标志文件
+        for path in [attack_flag_path, payload_path]:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
     
     defense_mode = st.toggle("🔵 蓝队防御模式", value=st.session_state.defense_mode)
     st.session_state.defense_mode = defense_mode
@@ -140,6 +187,10 @@ page = st.radio("选择页面", ["🏫 校园问答", "🔌 MCP 协议攻防"], 
 
 if page == "🏫 校园问答":
     # ========== 校园问答页面 ==========
+    
+    # MITM 攻击模式提示
+    if st.session_state.attack_mode:
+        st.warning("⚠️ 当前处于红队 MITM 攻击模式，mitmproxy 会自动在 LLM 请求中注入载荷")
     
     # 显示对话历史
     for msg_idx, msg in enumerate(st.session_state.history):
