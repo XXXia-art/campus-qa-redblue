@@ -7,12 +7,27 @@
 param(
     [Parameter(Mandatory=$false)]
     [ValidateSet("mcp", "prompt", "both")]
-    [string]$Mode = "mcp"
+    [string]$Mode = "mcp",
+
+    [Parameter(Mandatory=$false)]
+    [string]$ListenPort = "8080",
+
+    [Parameter(Mandatory=$false)]
+    [string]$WebPort = "8081",
+
+    # 网络层蓝队防御演示：将流量转发给下游蓝队代理，例如 127.0.0.1:8084
+    [Parameter(Mandatory=$false)]
+    [string]$UpstreamProxy = ""
 )
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  MCP Security Lab - Attacker Console" -ForegroundColor Cyan
 Write-Host "  Mode: $Mode" -ForegroundColor Yellow
+Write-Host "  Proxy Port: $ListenPort" -ForegroundColor Yellow
+Write-Host "  Web Port: $WebPort" -ForegroundColor Yellow
+if ($UpstreamProxy) {
+    Write-Host "  Upstream (Blue Team): $UpstreamProxy" -ForegroundColor Yellow
+}
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -36,7 +51,7 @@ $adapter = Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
 if ($adapter) {
     $hotspotIP = $adapter.IPAddress
     Write-Host "Hotspot IP: $hotspotIP" -ForegroundColor Cyan
-    Write-Host "Victim proxy: $hotspotIP`:8080" -ForegroundColor Cyan
+    Write-Host "Victim proxy: $hotspotIP`:$ListenPort" -ForegroundColor Cyan
 } else {
     $hotspotIP = Read-Host "Enter hotspot IP (e.g. 192.168.137.1)"
 }
@@ -83,9 +98,9 @@ function Test-PortOccupied($port) {
     return $false
 }
 
-$port8080Busy = Test-PortOccupied 8080
-$port8081Busy = Test-PortOccupied 8081
-if ($port8080Busy -or $port8081Busy) {
+$portListenBusy = Test-PortOccupied $ListenPort
+$portWebBusy = Test-PortOccupied $WebPort
+if ($portListenBusy -or $portWebBusy) {
     Write-Host "" 
     Write-Host "Please stop the processes above manually, or run this script as administrator." -ForegroundColor Red
     Write-Host "Alternatively, change the ports in this script and update victim proxy settings." -ForegroundColor Red
@@ -106,7 +121,11 @@ $logErr = Join-Path $tempDir "mitmweb.err.log"
 
 # Build command as a single string to avoid PowerShell argument parsing issues
 $webPassword = "mitm"
-$cmdArgs = "--web-host 0.0.0.0 --web-port 8081 --set web_password=$webPassword --listen-host 0.0.0.0 --listen-port 8080 --showhost"
+$cmdArgs = "--web-host 0.0.0.0 --web-port $WebPort --set web_password=$webPassword --listen-host 0.0.0.0 --listen-port $ListenPort --showhost"
+if ($UpstreamProxy) {
+    # 转发到蓝队代理；--ssl-insecure 忽略上游自签证书（仅教学演示）
+    $cmdArgs += " --mode upstream:http://$UpstreamProxy --ssl-insecure"
+}
 if ($scriptArgs.Count -gt 0) {
     $cmdArgs += " " + ($scriptArgs -join " ")
 }
@@ -149,7 +168,7 @@ if ($logContent -match '\?token=([a-f0-9]{32})') {
     Write-Host "Detected random token: $token" -ForegroundColor Cyan
 }
 
-$webUrl = "http://localhost:8081/?token=$token"
+$webUrl = "http://localhost:$WebPort/?token=$token"
 Write-Host "Web UI URL: $webUrl" -ForegroundColor Yellow
 Start-Process $webUrl
 

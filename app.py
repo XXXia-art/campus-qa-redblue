@@ -175,8 +175,36 @@ with st.sidebar:
     defense_mode = st.toggle("🔵 蓝队防御模式", value=st.session_state.defense_mode)
     st.session_state.defense_mode = defense_mode
     
+    # 蓝队网络层防御标志文件路径
+    defense_flag_path = os.path.join(os.path.dirname(__file__), ".blue_team_enabled")
+    defense_mode_path = os.path.join(os.path.dirname(__file__), ".blue_team_mode")
+    
     if defense_mode:
         st.markdown("<div class='defense-box'>防御模式已开启，可疑输入将被拦截</div>", unsafe_allow_html=True)
+        
+        defense_action = st.selectbox(
+            "蓝队网络层动作",
+            ["清洗载荷（sanitize）", "阻断请求（block）"],
+            index=0,
+            help="清洗：剥离注入载荷后放行；阻断：直接返回拦截响应"
+        )
+        
+        # 写入蓝队网络层防御标志
+        try:
+            with open(defense_flag_path, "w") as f:
+                f.write("enabled")
+            mode_value = "sanitize" if "清洗" in defense_action else "block"
+            with open(defense_mode_path, "w", encoding="utf-8") as f:
+                f.write(mode_value)
+        except Exception as e:
+            st.error(f"写入蓝队防御标志失败: {e}")
+    else:
+        for path in [defense_flag_path, defense_mode_path]:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception:
+                    pass
 
 # ========== 主界面 ==========
 st.title("🎓 校园智能问答机器人")
