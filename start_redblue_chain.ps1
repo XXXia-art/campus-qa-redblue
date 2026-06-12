@@ -1,4 +1,4 @@
-﻿﻿# Local Red/Blue Team Proxy Chain Launcher
+﻿# Local Red/Blue Team Proxy Chain Launcher
 # Starts the blue-team defense proxy (downstream) and the red-team MITM proxy (upstream).
 # Usage: .\start_redblue_chain.ps1 [-AttackMode prompt|mcp|both]
 
