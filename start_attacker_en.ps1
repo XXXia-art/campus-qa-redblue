@@ -80,27 +80,48 @@ $webPassword = "mitm"
 $configFile = Join-Path $tempDir "config.yaml"
 "web_password: $webPassword" | Out-File -FilePath $configFile -Encoding utf8 -Force
 
-$logFile = Join-Path $tempDir "mitmweb.log"
+$logOut = Join-Path $tempDir "mitmweb.out.log"
+$logErr = Join-Path $tempDir "mitmweb.err.log"
 
 $baseArgs = @("--conf", $tempDir, "--web-host", "0.0.0.0", "--web-port", "8081", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
 $allArgs = $baseArgs + $scriptArgs
 
-$proc = Start-Process mitmweb -ArgumentList $allArgs -PassThru -RedirectStandardOutput $logFile -RedirectStandardError $logFile
-Write-Host "mitmproxy starting (PID: $($proc.Id))" -ForegroundColor Green
+try {
+    $proc = Start-Process mitmweb -ArgumentList $allArgs -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr -ErrorAction Stop
+    Write-Host "mitmproxy starting (PID: $($proc.Id))" -ForegroundColor Green
+} catch {
+    Write-Host "Failed to start mitmproxy: $_" -ForegroundColor Red
+    if (Test-Path $logErr) { Get-Content $logErr | ForEach-Object { Write-Host $_ -ForegroundColor Red } }
+    if ($tempDir -and (Test-Path $tempDir)) { Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
+    exit 1
+}
+
 Write-Host "Config dir: $tempDir" -ForegroundColor Gray
 Write-Host "Web UI password: $webPassword" -ForegroundColor Yellow
 
 # Wait for mitmweb to print the authentication token
 Start-Sleep -Seconds 3
 
+# Verify process is still running
+if ($proc.HasExited) {
+    Write-Host "mitmproxy exited unexpectedly!" -ForegroundColor Red
+    Write-Host "=== stdout ===" -ForegroundColor Red
+    if (Test-Path $logOut) { Get-Content $logOut | ForEach-Object { Write-Host $_ -ForegroundColor Red } }
+    Write-Host "=== stderr ===" -ForegroundColor Red
+    if (Test-Path $logErr) { Get-Content $logErr | ForEach-Object { Write-Host $_ -ForegroundColor Red } }
+    if ($tempDir -and (Test-Path $tempDir)) { Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
+    exit 1
+}
+
 # Try to extract token from log
 $token = $webPassword
-if (Test-Path $logFile) {
-    $logContent = Get-Content $logFile -Raw -ErrorAction SilentlyContinue
-    if ($logContent -match '\?token=([a-f0-9]{32})') {
-        $token = $Matches[1]
-        Write-Host "Detected random token: $token" -ForegroundColor Cyan
-    }
+$logContent = ""
+if (Test-Path $logOut) { $logContent += Get-Content $logOut -Raw -ErrorAction SilentlyContinue }
+if (Test-Path $logErr) { $logContent += Get-Content $logErr -Raw -ErrorAction SilentlyContinue }
+
+if ($logContent -match '\?token=([a-f0-9]{32})') {
+    $token = $Matches[1]
+    Write-Host "Detected random token: $token" -ForegroundColor Cyan
 }
 
 $webUrl = "http://localhost:8081/?token=$token"
