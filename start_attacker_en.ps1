@@ -95,22 +95,27 @@ New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 $logOut = Join-Path $tempDir "mitmweb.out.log"
 $logErr = Join-Path $tempDir "mitmweb.err.log"
 
-$baseArgs = @("--web-host", "0.0.0.0", "--web-port", "8081", "--listen-host", "0.0.0.0", "--listen-port", "8080", "--showhost")
-$allArgs = $baseArgs + $scriptArgs
+# Build command as a single string to avoid PowerShell argument parsing issues
+$webPassword = "mitm"
+$cmdArgs = "--web-host 0.0.0.0 --web-port 8081 --set web_password=$webPassword --listen-host 0.0.0.0 --listen-port 8080 --showhost"
+if ($scriptArgs.Count -gt 0) {
+    $cmdArgs += " " + ($scriptArgs -join " ")
+}
+$cmd = "mitmweb $cmdArgs > `"$logOut`" 2> `"$logErr`""
 
 try {
-    $proc = Start-Process mitmweb -ArgumentList $allArgs -PassThru -RedirectStandardOutput $logOut -RedirectStandardError $logErr -ErrorAction Stop
+    $proc = Start-Process cmd -ArgumentList "/c", $cmd -PassThru -NoNewWindow -ErrorAction Stop
     Write-Host "mitmproxy starting (PID: $($proc.Id))" -ForegroundColor Green
 } catch {
     Write-Host "Failed to start mitmproxy: $_" -ForegroundColor Red
-    if (Test-Path $logErr) { Get-Content $logErr | ForEach-Object { Write-Host $_ -ForegroundColor Red } }
     if ($tempDir -and (Test-Path $tempDir)) { Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue }
     exit 1
 }
 
 Write-Host "Log dir: $tempDir" -ForegroundColor Gray
+Write-Host "Web UI password: $webPassword" -ForegroundColor Yellow
 
-# Wait for mitmweb to print the authentication token
+# Wait for mitmweb to start
 Start-Sleep -Seconds 3
 
 # Verify process is still running
@@ -124,19 +129,15 @@ if ($proc.HasExited) {
     exit 1
 }
 
-# Try to extract token from log
-$token = $null
+# Try to extract token from log (fallback to fixed password)
+$token = $webPassword
 $logContent = ""
 if (Test-Path $logOut) { $logContent += Get-Content $logOut -Raw -ErrorAction SilentlyContinue }
 if (Test-Path $logErr) { $logContent += Get-Content $logErr -Raw -ErrorAction SilentlyContinue }
 
 if ($logContent -match '\?token=([a-f0-9]{32})') {
     $token = $Matches[1]
-    Write-Host "Detected token: $token" -ForegroundColor Cyan
-} else {
-    Write-Host "Could not detect token from logs. Please check the logs at:" -ForegroundColor Red
-    Write-Host "  $logOut" -ForegroundColor Red
-    Write-Host "  $logErr" -ForegroundColor Red
+    Write-Host "Detected random token: $token" -ForegroundColor Cyan
 }
 
 $webUrl = "http://localhost:8081/?token=$token"
