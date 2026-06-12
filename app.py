@@ -273,33 +273,29 @@ if page == "🏫 校园问答":
 
 else:
     # ========== MCP 真实 API Server 演示 ==========
-    st.header("🔌 MCP 真实 API / 安全攻防演示")
+    st.header("🔌 MCP 协议安全演示")
     st.markdown("""
     MCP 是 Anthropic 推出的开放协议，用于让 LLM Agent 连接外部工具和数据源。
-    本页面提供：1）真实 API Server 工具调用；2）恶意 MCP Server 攻防检测示例。
+    使用左侧边栏的 **🔴 红队攻击模式** 和 **🔵 蓝队防御模式** 切换 MCP 攻防状态。
     """)
 
     from backend.mcp_protocol import MCPClient
     from backend.mcp_real_api_server import create_real_api_mcp_server
     from defense.mcp_defense import MCPDefenseEngine
-    from attack.mcp_attacks import PermissionEscalationServer
+    from attack.mcp_attacks import ToolPoisoningServer
 
-    server_mode = st.radio(
-        "选择 MCP Server",
-        ["🌐 真实 API Server", "🔴 恶意 MCP Server（权限提升）"],
-        horizontal=True,
-        index=0
-    )
+    attack_mode = st.session_state.get("attack_mode", False)
+    defense_mode = st.session_state.get("defense_mode", False)
 
-    if server_mode == "🌐 真实 API Server":
+    if attack_mode:
+        server = ToolPoisoningServer()
+        st.error(f"🔴 已启动恶意 MCP Server: {server.name}")
+        st.warning("该 Server 注册了看似正常的工具，实际执行数据外泄或命令注入。")
+    else:
         server = create_real_api_mcp_server()
         st.success(f"🌐 已启动真实 API MCP Server: {server.name}")
-        st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
-    else:
-        server = PermissionEscalationServer()
-        st.error(f"🔴 已启动恶意 MCP Server: {server.name}")
-        st.warning(server.get_permission_warning())
-        st.info("下方的‘MCP Server 安全检查’会检测出该 Server 申请了过多高危权限。")
+        if not attack_mode:
+            st.info("本 Server 的工具会发出真实的 HTTP 请求到 wttr.in / ip-api.com")
 
     client = MCPClient()
     client.connect(server)
@@ -315,50 +311,6 @@ else:
             for tool in client.discovered_tools:
                 st.write(f"- `{tool['name']}`: {tool['description']}")
 
-    # 工具调用测试
-    st.divider()
-    st.subheader("🛠️ 工具调用测试")
-
-    if not client.discovered_tools:
-        st.info("该 Server 没有注册任何工具")
-    else:
-        tool_names = [t["name"] for t in client.discovered_tools]
-        selected_tool_name = st.selectbox("选择要调用的工具", tool_names)
-
-        selected_tool = None
-        for t in server.tools.values():
-            if t.name == selected_tool_name:
-                selected_tool = t
-                break
-
-        if selected_tool:
-            args = {}
-            if selected_tool.parameters:
-                param_cols = st.columns(min(len(selected_tool.parameters), 3))
-                for idx, (param_name, param_info) in enumerate(selected_tool.parameters.items()):
-                    with param_cols[idx % 3]:
-                        default_val = ""
-                        if param_name == "city":
-                            default_val = "Nanjing"
-                        elif param_name == "ip":
-                            default_val = "8.8.8.8"
-                        args[param_name] = st.text_input(
-                            f"{param_name} ({param_info.get('description', '')})",
-                            value=default_val,
-                            key=f"mcp_param_{param_name}"
-                        )
-
-            if st.button("▶️ 调用工具", type="primary"):
-                with st.spinner("正在调用 MCP 工具..."):
-                    result = client.call_tool(selected_tool_name, **args)
-
-                st.markdown("**调用结果：**")
-                if result.get("success"):
-                    st.success("工具调用成功")
-                    st.json(result.get("result", {}))
-                else:
-                    st.error(f"调用失败: {result.get('error')}")
-
     # 安全检查
     st.divider()
     st.subheader("🔵 MCP Server 安全检查")
@@ -371,11 +323,78 @@ else:
         "tools": server.list_tools(),
     })
 
-    if report["overall_safe"]:
-        st.success("✅ 综合检查通过 — 该 MCP Server 安全风险较低")
+    blocked_by_defense = False
+    if defense_mode:
+        if report["overall_safe"]:
+            st.success("✅ 蓝队检查通过 — 该 MCP Server 安全，可以继续调用工具")
+        else:
+            blocked_by_defense = True
+            st.error("🛡️ 【蓝队防御拦截】检测到恶意 MCP Server，已禁止工具调用")
     else:
-        st.error("🚫 检测到安全风险！请谨慎使用该 Server")
+        if report["overall_safe"]:
+            st.success("✅ 综合检查通过 — 该 MCP Server 安全风险较低")
+        else:
+            st.error("🚫 检测到安全风险！请谨慎使用该 Server")
 
     if report["recommendations"]:
         for rec in report["recommendations"]:
             st.info(rec)
+
+    # 工具调用测试
+    if not blocked_by_defense:
+        st.divider()
+        st.subheader("🛠️ 工具调用测试")
+
+        if not client.discovered_tools:
+            st.info("该 Server 没有注册任何工具")
+        else:
+            tool_names = [t["name"] for t in client.discovered_tools]
+            selected_tool_name = st.selectbox("选择要调用的工具", tool_names)
+
+            selected_tool = None
+            for t in server.tools.values():
+                if t.name == selected_tool_name:
+                    selected_tool = t
+                    break
+
+            if selected_tool:
+                args = {}
+                if selected_tool.parameters:
+                    param_cols = st.columns(min(len(selected_tool.parameters), 3))
+                    for idx, (param_name, param_info) in enumerate(selected_tool.parameters.items()):
+                        with param_cols[idx % 3]:
+                            default_val = ""
+                            if param_name == "city":
+                                default_val = "Nanjing"
+                            elif param_name == "ip":
+                                default_val = "8.8.8.8"
+                            elif param_name == "to":
+                                default_val = "admin@seu.edu.cn"
+                            elif param_name == "subject":
+                                default_val = "校园通知"
+                            elif param_name == "body":
+                                default_val = "这是一条测试通知"
+                            elif param_name == "student_id":
+                                default_val = "22020001"
+                            elif param_name == "command":
+                                default_val = "cat /etc/passwd"
+                            args[param_name] = st.text_input(
+                                f"{param_name} ({param_info.get('description', '')})",
+                                value=default_val,
+                                key=f"mcp_param_{param_name}"
+                            )
+
+                if st.button("▶️ 调用工具", type="primary"):
+                    with st.spinner("正在调用 MCP 工具..."):
+                        result = client.call_tool(selected_tool_name, **args)
+
+                    st.markdown("**调用结果：**")
+                    if result.get("success"):
+                        result_data = result.get("result", {})
+                        if isinstance(result_data, dict) and result_data.get("warning"):
+                            st.error(result_data["warning"])
+                        else:
+                            st.success("工具调用成功")
+                        st.json(result_data)
+                    else:
+                        st.error(f"调用失败: {result.get('error')}")
